@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, setToken, getToken } from './api';
 
 type Termometro = {
@@ -86,7 +86,287 @@ function Login({ onOk }: { onOk: () => void }) {
   );
 }
 
+type ItemVenta = {
+  key: string;
+  nombre: string;
+  precio: number;
+  manual?: boolean;
+};
+
+function beepScanner() {
+  const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+  if (!AudioContextClass) return;
+  const ctx = new AudioContextClass();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'square';
+  osc.frequency.value = 880;
+  gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.12);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.13);
+}
+
 function Caja({ onLogout }: { onLogout: () => void }) {
+  const [items, setItems] = useState<ItemVenta[]>([]);
+  const [recibido, setRecibido] = useState('');
+  const [manualPrecio, setManualPrecio] = useState('');
+  const [modoEntrada, setModoEntrada] = useState<'recibido' | 'manual'>('recibido');
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [procesando, setProcesando] = useState(false);
+  const [ultimaVenta, setUltimaVenta] = useState<number | null>(null);
+  const [reco, setReco] = useState<{ estado: 'analizando' | 'ok' | 'fail'; texto: string } | null>(null);
+
+  async function cargar() {
+    try { await api.resumen(); }
+    catch (e: any) { if (e.status === 402) alert('Tu acceso ha vencido. Yapea o Plinea para continuar.'); }
+  }
+  useEffect(() => { cargar(); }, []);
+
+  const total = items.reduce((sum, item) => sum + item.precio, 0);
+  const recibidoNum = parseFloat(recibido) || 0;
+  const vuelto = recibido ? recibidoNum - total : null;
+  const mostrarTeclado = modoEntrada === 'manual' || total > 0;
+
+  async function reconocerDataUrl(foto: string) {
+    setProcesando(true);
+    setReco({ estado: 'analizando', texto: 'Reconociendo producto...' });
+    try {
+      const r = await api.reconocerProducto(foto);
+      if (r.encontrado) {
+        const producto = r.producto;
+        setItems(actual => [...actual, {
+          key: `${producto.id}-${Date.now()}`,
+          nombre: producto.marca ? `${producto.nombre} · ${producto.marca}` : producto.nombre,
+          precio: Number(producto.precio),
+        }]);
+        setReco({ estado: 'ok', texto: `${producto.nombre} · S/. ${Number(producto.precio).toFixed(2)} (${r.confianza}%)` });
+        setModoEntrada('recibido');
+        beepScanner();
+      } else {
+        setReco({ estado: 'fail', texto: 'No reconocido. Ingresa precio manual.' });
+        setManualPrecio('');
+        setModoEntrada('manual');
+      }
+    } catch (e: any) {
+      const m = e?.data?.error === 'sin_productos' ? 'No tienes productos en inventario aun.' : ('Error: ' + e.message);
+      setReco({ estado: 'fail', texto: m });
+      setManualPrecio('');
+      setModoEntrada('manual');
+    } finally {
+      setProcesando(false);
+    }
+  }
+
+  function tecla(t: string) {
+    const setValor = modoEntrada === 'manual' ? setManualPrecio : setRecibido;
+    const valor = modoEntrada === 'manual' ? manualPrecio : recibido;
+    if (t === '←') return setValor(v => v.slice(0, -1));
+    if (t === '.' && valor.includes('.')) return;
+    setValor(v => (v + t).slice(0, 9));
+  }
+
+  function agregarManual() {
+    const precio = parseFloat(manualPrecio);
+    if (!precio || precio <= 0) return;
+    setItems(actual => [...actual, { key: `manual-${Date.now()}`, nombre: 'Producto manual', precio, manual: true }]);
+    setManualPrecio('');
+    setModoEntrada('recibido');
+    setReco(null);
+    beepScanner();
+  }
+
+  function quitarItem(key: string) {
+    setItems(actual => actual.filter(item => item.key !== key));
+  }
+
+  async function registrar() {
+    if (total <= 0) return;
+    await api.registrarVenta(total);
+    setUltimaVenta(total);
+    setItems([]);
+    setRecibido('');
+    setManualPrecio('');
+    setModoEntrada('recibido');
+    setReco(null);
+    cargar();
+  }
+
+  return (
+    <div className="mx-auto flex min-h-[calc(100vh-80px)] max-w-md flex-col gap-3 p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-lg font-bold">Registro</h2>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCameraOpen(true)}
+            className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-lg font-bold active:bg-emerald-700"
+            aria-label="Abrir camara"
+          >
+            📷
+          </button>
+          <button onClick={onLogout} className="h-10 rounded-lg bg-slate-800 px-3 text-sm text-slate-300 active:bg-slate-700">Salir</button>
+        </div>
+      </div>
+
+      {cameraOpen && (
+        <CamaraCaja
+          procesando={procesando}
+          onClose={() => setCameraOpen(false)}
+          onCapture={reconocerDataUrl}
+        />
+      )}
+
+      {reco && (
+        <div className={`rounded-lg px-3 py-2 text-center text-sm font-semibold ${
+          reco.estado === 'ok' ? 'bg-green-900/40 text-green-300'
+          : reco.estado === 'fail' ? 'bg-red-900/40 text-red-300'
+          : 'bg-slate-700 text-slate-200'}`}>
+          {reco.texto}
+        </div>
+      )}
+
+      <div className="min-h-24 flex-1 overflow-y-auto rounded-xl bg-slate-800 p-2">
+        {items.length === 0 ? (
+          <div className="flex h-full min-h-20 items-center justify-center text-sm text-slate-400">
+            Escanea productos
+          </div>
+        ) : items.map(item => (
+          <div key={item.key} className="flex items-center gap-2 border-b border-slate-700/70 py-2 last:border-b-0">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold">{item.nombre}</div>
+              {item.manual && <div className="text-xs text-amber-300">manual</div>}
+            </div>
+            <div className="text-sm font-bold text-green-300">S/. {item.precio.toFixed(2)}</div>
+            <button onClick={() => quitarItem(item.key)} className="h-8 w-8 rounded-lg bg-slate-700 text-sm active:bg-slate-600">×</button>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={() => setModoEntrada('recibido')}
+          className={`rounded-xl p-3 text-left ${modoEntrada === 'recibido' ? 'bg-sky-600' : 'bg-slate-800'}`}
+        >
+          <div className="text-xs text-slate-200/80">Recibido</div>
+          <div className="text-2xl font-bold">S/. {recibido || '0'}</div>
+        </button>
+        <div className="rounded-xl bg-slate-800 p-3 text-right">
+          <div className="text-xs text-slate-400">Total</div>
+          <div className="text-2xl font-bold">S/. {total.toFixed(2)}</div>
+        </div>
+      </div>
+
+      {vuelto !== null && total > 0 && (
+        <div className={`rounded-xl p-3 text-center text-2xl font-bold ${vuelto < 0 ? 'bg-red-900/40 text-red-300' : 'bg-green-900/40 text-green-300'}`}>
+          {vuelto < 0 ? `Falta S/. ${Math.abs(vuelto).toFixed(2)}` : `Vuelto: S/. ${vuelto.toFixed(2)}`}
+        </div>
+      )}
+
+      {modoEntrada === 'manual' && (
+        <div className="rounded-xl border border-amber-500/60 bg-amber-950/30 p-3">
+          <div className="mb-2 text-xs font-semibold text-amber-200">Precio manual</div>
+          <div className="mb-3 rounded-lg bg-slate-900 px-3 py-2 text-right text-3xl font-bold">S/. {manualPrecio || '0'}</div>
+          <button onClick={agregarManual} className="w-full rounded-lg bg-amber-500 py-3 font-bold text-slate-950 active:bg-amber-400">
+            Agregar manual
+          </button>
+        </div>
+      )}
+
+      {mostrarTeclado && (
+        <div className="grid grid-cols-3 gap-2">
+          {['1','2','3','4','5','6','7','8','9','00','0','.'].map(k => (
+            <button key={k} onClick={() => tecla(k)}
+              className="min-h-12 rounded-lg bg-slate-700 py-3 text-2xl font-bold active:bg-slate-600">{k}</button>
+          ))}
+          <button onClick={() => tecla('←')} className="min-h-12 rounded-lg bg-slate-700 py-3 text-2xl active:bg-slate-600">←</button>
+          <button onClick={registrar} disabled={total <= 0}
+            className="col-span-2 min-h-12 rounded-lg bg-sky-500 py-3 text-xl font-bold disabled:opacity-40 active:bg-sky-600">
+            Cobrar
+          </button>
+        </div>
+      )}
+
+      {!mostrarTeclado && (
+        <button onClick={() => setCameraOpen(true)} className="rounded-xl bg-emerald-600 py-4 text-lg font-bold active:bg-emerald-700">
+          Abrir camara
+        </button>
+      )}
+
+      {ultimaVenta !== null && <NotaWhatsApp monto={ultimaVenta} onClose={() => setUltimaVenta(null)} />}
+    </div>
+  );
+}
+
+function CamaraCaja({ procesando, onClose, onCapture }: {
+  procesando: boolean;
+  onClose: () => void;
+  onCapture: (foto: string) => Promise<void>;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let activo = true;
+    async function iniciar() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+        if (!activo) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) videoRef.current.srcObject = stream;
+      } catch (e: any) {
+        setError(e?.message || 'No se pudo abrir la camara');
+      }
+    }
+    iniciar();
+    return () => {
+      activo = false;
+      streamRef.current?.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    };
+  }, []);
+
+  async function capturar() {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) return;
+    const canvas = document.createElement('canvas');
+    const max = 1024;
+    const escala = Math.min(1, max / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.round(video.videoWidth * escala);
+    canvas.height = Math.round(video.videoHeight * escala);
+    canvas.getContext('2d')!.drawImage(video, 0, 0, canvas.width, canvas.height);
+    await onCapture(canvas.toDataURL('image/jpeg', 0.8));
+  }
+
+  return (
+    <div className="rounded-xl border border-emerald-700 bg-slate-950 p-2">
+      <div className="relative overflow-hidden rounded-lg bg-black">
+        <video ref={videoRef} autoPlay playsInline muted className="aspect-[4/3] w-full object-cover" />
+        {procesando && <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-sm font-bold">Analizando...</div>}
+        {error && <div className="absolute inset-0 flex items-center justify-center bg-black/80 p-4 text-center text-sm text-red-300">{error}</div>}
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <button onClick={capturar} disabled={procesando || !!error} className="rounded-lg bg-emerald-600 py-3 font-bold disabled:opacity-40 active:bg-emerald-700">
+          Capturar
+        </button>
+        <button onClick={onClose} className="rounded-lg bg-slate-700 py-3 font-bold active:bg-slate-600">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CajaOld({ onLogout }: { onLogout: () => void }) {
   const [monto, setMonto] = useState('');
   const [pagaCon, setPagaCon] = useState<number | null>(null);
   const [resumen, setResumen] = useState<Resumen | null>(null);
