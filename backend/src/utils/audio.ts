@@ -13,7 +13,7 @@ export async function transcribirAudio(audioDataUrl: string): Promise<{ proveedo
   form.append('model', process.env.GROQ_STT_MODEL || 'whisper-large-v3-turbo');
   form.append('language', 'es');
   form.append('temperature', '0');
-  form.append('file', new Blob([buffer], { type: mime }), mime.includes('mp4') ? 'audio.mp4' : 'audio.webm');
+  form.append('file', new Blob([new Uint8Array(buffer)], { type: mime }), mime.includes('mp4') ? 'audio.mp4' : 'audio.webm');
 
   const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
     method: 'POST',
