@@ -32,4 +32,11 @@ export const api = {
   historial: () => req('/ventas'),
   eliminarVenta: (id: number) => req(`/ventas/${id}`, { method: 'DELETE' }),
   suscripcion: () => req('/suscripcion'),
+
+  // Inventario
+  productos: () => req('/productos'),
+  crearProducto: (p: any) => req('/productos', { method: 'POST', body: JSON.stringify(p) }),
+  eliminarProducto: (id: number) => req(`/productos/${id}`, { method: 'DELETE' }),
+  analizarFoto: (fotos: string[]) =>
+    req('/productos/analizar', { method: 'POST', body: JSON.stringify({ fotos }) }),
 };

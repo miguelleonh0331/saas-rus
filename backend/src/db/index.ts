@@ -52,6 +52,21 @@ export function migrate(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_ventas_negocio_fecha ON ventas(negocio_id, fecha);
 
+    CREATE TABLE IF NOT EXISTS productos (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      negocio_id  INTEGER NOT NULL REFERENCES negocios(id) ON DELETE CASCADE,
+      nombre      TEXT NOT NULL,
+      marca       TEXT,
+      precio      REAL NOT NULL DEFAULT 0,
+      color       TEXT,                          -- atributo para el pre-filtro
+      tags        TEXT,                          -- etiquetas libres separadas por coma
+      foto        TEXT,                          -- imagen en base64 (data URL)
+      atributos   TEXT NOT NULL DEFAULT '{}',    -- JSON con lo que detecto la IA
+      creado_en   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_productos_negocio ON productos(negocio_id);
+    CREATE INDEX IF NOT EXISTS idx_productos_color ON productos(negocio_id, color);
+
     CREATE TABLE IF NOT EXISTS configuraciones (
       negocio_id  INTEGER PRIMARY KEY REFERENCES negocios(id) ON DELETE CASCADE,
       clave_valor TEXT NOT NULL DEFAULT '{}'   -- JSON libre por negocio
