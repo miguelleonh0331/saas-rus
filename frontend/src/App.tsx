@@ -310,7 +310,8 @@ function Inventario() {
   useEffect(() => { cargar(); }, []);
 
   async function leerFoto(file: File) {
-    setForm(f => ({ ...f, foto: await reducirFoto(file) }));
+    const foto = await reducirFoto(file);
+    setForm(f => ({ ...f, foto }));
   }
 
   async function analizar() {
