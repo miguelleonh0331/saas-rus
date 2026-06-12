@@ -92,8 +92,11 @@ function Caja({ onLogout }: { onLogout: () => void }) {
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [ultimaVenta, setUltimaVenta] = useState<number | null>(null);
   const [reco, setReco] = useState<{ estado: 'analizando' | 'ok' | 'fail'; texto: string } | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(true);
+  const [productoDetectado, setProductoDetectado] = useState<{ id: number; nombre: string; marca: string; precio: number } | null>(null);
 
   async function reconocer(file: File) {
+    setScannerOpen(false);
     setReco({ estado: 'analizando', texto: 'Reconociendo producto...' });
     try {
       const foto = await reducirFoto(file);
@@ -101,12 +104,15 @@ function Caja({ onLogout }: { onLogout: () => void }) {
       if (r.encontrado) {
         setMonto(String(r.producto.precio));
         setPagaCon(null);
+        setProductoDetectado(r.producto);
         setReco({ estado: 'ok', texto: `${r.producto.nombre} — S/. ${Number(r.producto.precio).toFixed(2)} (${r.confianza}%)` });
       } else {
+        setProductoDetectado(null);
         setReco({ estado: 'fail', texto: 'No reconocido. Ingresa el monto a mano.' });
       }
     } catch (e: any) {
       const m = e?.data?.error === 'sin_productos' ? 'No tienes productos en inventario aun.' : ('Error: ' + e.message);
+      setProductoDetectado(null);
       setReco({ estado: 'fail', texto: m });
     }
   }
@@ -138,8 +144,29 @@ function Caja({ onLogout }: { onLogout: () => void }) {
   return (
     <div className="mx-auto max-w-md space-y-4 p-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold">Mi Caja</h2>
+        <h2 className="text-xl font-bold">Registro</h2>
         <button onClick={onLogout} className="text-slate-400 text-sm">Salir</button>
+      </div>
+
+      <div className="rounded-2xl bg-emerald-900/60 border border-emerald-600 p-4 space-y-3 sticky top-3 z-20 shadow-xl shadow-black/20">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-emerald-100">Scanner activo</h3>
+            <p className="text-sm text-emerald-200/80">La cámara queda lista al entrar a caja.</p>
+          </div>
+          <button
+            onClick={() => setScannerOpen(v => !v)}
+            className="rounded-xl bg-emerald-500 px-4 py-2 font-bold text-slate-950 active:bg-emerald-400"
+          >
+            {scannerOpen ? 'Ocultar' : 'Mostrar'}
+          </button>
+        </div>
+        <button
+          onClick={() => setScannerOpen(true)}
+          className="w-full rounded-2xl bg-emerald-500 py-4 text-lg font-bold text-slate-950 active:bg-emerald-400"
+        >
+          📷 Abrir cámara
+        </button>
       </div>
 
       {/* Termometro mensual */}
@@ -175,11 +202,44 @@ function Caja({ onLogout }: { onLogout: () => void }) {
       )}
 
       {/* Reconocer producto con la camara */}
-      <label className="block w-full rounded-2xl bg-emerald-600 py-4 text-center text-lg font-bold cursor-pointer active:bg-emerald-700">
-        📷 Reconocer producto con foto
-        <input type="file" accept="image/*" capture="environment" className="hidden"
-          onChange={e => { if (e.target.files?.[0]) reconocer(e.target.files[0]); e.currentTarget.value = ''; }} />
-      </label>
+      <div className="rounded-2xl bg-emerald-950/40 border border-emerald-700 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-emerald-200">Modo scanner</h3>
+            <p className="text-sm text-emerald-300/80">Apunta al producto, toma foto y llena el monto solo.</p>
+          </div>
+          <button
+            onClick={() => setScannerOpen(v => !v)}
+            className="rounded-xl bg-emerald-600 px-4 py-2 font-bold active:bg-emerald-700"
+          >
+            {scannerOpen ? 'Cerrar' : 'Abrir'}
+          </button>
+        </div>
+
+        {scannerOpen ? (
+          <label className="block w-full rounded-2xl bg-emerald-600 py-4 text-center text-lg font-bold cursor-pointer active:bg-emerald-700">
+            📷 Escanear producto
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={e => {
+                if (e.target.files?.[0]) reconocer(e.target.files[0]);
+                e.currentTarget.value = '';
+              }}
+            />
+          </label>
+          ) : null}
+
+        {productoDetectado && (
+          <div className="rounded-xl bg-emerald-900/40 p-3 text-sm text-emerald-100">
+            Detectado: <span className="font-bold">{productoDetectado.nombre}</span>
+            {productoDetectado.marca ? ` · ${productoDetectado.marca}` : ''}
+            {' '}— S/. {Number(productoDetectado.precio).toFixed(2)}
+          </div>
+        )}
+      </div>
       {reco && (
         <div className={`rounded-xl p-3 text-center font-semibold ${
           reco.estado === 'ok' ? 'bg-green-900/40 text-green-300'
