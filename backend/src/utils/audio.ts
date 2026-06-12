@@ -1,5 +1,5 @@
 function dataUrlToBuffer(dataUrl: string): { buffer: Buffer; mime: string } {
-  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  const match = dataUrl.match(/^data:([^;,]+)(?:;[^,]+)*;base64,(.+)$/);
   if (!match) throw new Error('Audio invalido');
   return { buffer: Buffer.from(match[2], 'base64'), mime: match[1] };
 }
