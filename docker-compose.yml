@@ -1,0 +1,35 @@
+services:
+  backend:
+    build: ./backend
+    container_name: rus_backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - rus_data:/app/data          # SQLite persiste aqui (sobrevive a recrear el contenedor)
+    expose:
+      - "4000"
+    networks:
+      - rus_net
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - VITE_API_URL=${VITE_API_URL}
+    container_name: rus_frontend
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"       # Nginx sirve la PWA y hace proxy /api -> backend
+    depends_on:
+      - backend
+    networks:
+      - rus_net
+
+volumes:
+  rus_data:
+
+networks:
+  rus_net:
+    driver: bridge
