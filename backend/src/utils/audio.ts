@@ -4,6 +4,16 @@ function dataUrlToBuffer(dataUrl: string): { buffer: Buffer; mime: string } {
   return { buffer: Buffer.from(match[2], 'base64'), mime: match[1] };
 }
 
+function audioFilename(mime: string): string {
+  if (mime.includes('webm')) return 'audio.webm';
+  if (mime.includes('mp4')) return 'audio.mp4';
+  if (mime.includes('mpeg')) return 'audio.mp3';
+  if (mime.includes('mp3')) return 'audio.mp3';
+  if (mime.includes('ogg')) return 'audio.ogg';
+  if (mime.includes('wav')) return 'audio.wav';
+  return 'audio.webm';
+}
+
 export async function transcribirAudio(audioDataUrl: string): Promise<{ proveedor: string; texto: string }> {
   const key = (process.env.GROQ_API_KEY || '').trim();
   if (!key) throw new Error('Groq no disponible: sin GROQ_API_KEY');
@@ -13,7 +23,8 @@ export async function transcribirAudio(audioDataUrl: string): Promise<{ proveedo
   form.append('model', process.env.GROQ_STT_MODEL || 'whisper-large-v3-turbo');
   form.append('language', 'es');
   form.append('temperature', '0');
-  form.append('file', new Blob([new Uint8Array(buffer)], { type: mime }), mime.includes('mp4') ? 'audio.mp4' : 'audio.webm');
+  const safeMime = mime === 'application/octet-stream' ? 'audio/webm' : mime;
+  form.append('file', new Blob([new Uint8Array(buffer)], { type: safeMime }), audioFilename(safeMime));
 
   const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
     method: 'POST',

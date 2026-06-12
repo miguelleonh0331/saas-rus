@@ -136,6 +136,7 @@ productosRouter.post('/voz', async (req, res) => {
 
   if (!catalogo.length) return res.status(404).json({ error: 'sin_productos', mensaje: 'No hay productos en el inventario.' });
 
+  let etapa = 'transcripcion';
   try {
     const transcripcion = await transcribirAudio(audio);
     const listado = catalogo.map(p =>
@@ -150,6 +151,7 @@ productosRouter.post('/voz', async (req, res) => {
       `Responde SOLO JSON valido con esta forma: ` +
       `{"items":[{"id":1,"cantidad":2,"nombre":"texto escuchado","confianza":0-100}]}`;
 
+    etapa = 'interpretacion';
     const { proveedor, texto } = await visionChat(prompt, []);
     const parsed = extraerJSON(texto) || {};
     const items = Array.isArray(parsed.items) ? parsed.items : [];
@@ -174,6 +176,7 @@ productosRouter.post('/voz', async (req, res) => {
 
     res.json({ proveedorTranscripcion: transcripcion.proveedor, proveedorParser: proveedor, texto: transcripcion.texto, items: resueltos });
   } catch (e) {
-    res.status(502).json({ error: (e as Error).message });
+    console.error('[productos/voz]', etapa, (e as Error).message);
+    res.status(502).json({ error: `${etapa}: ${(e as Error).message}` });
   }
 });

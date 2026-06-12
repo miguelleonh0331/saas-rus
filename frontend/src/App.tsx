@@ -43,6 +43,11 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+function preferredAudioMime(): string | undefined {
+  const options = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+  return options.find(type => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type));
+}
+
 export default function App() {
   const [logged, setLogged] = useState(!!getToken());
   const [tab, setTab] = useState<'caja' | 'inventario'>('caja');
@@ -238,7 +243,8 @@ function Caja({ onLogout }: { onLogout: () => void }) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       audioChunksRef.current = [];
-      const recorder = new MediaRecorder(stream);
+      const mimeType = preferredAudioMime();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       recorderRef.current = recorder;
       recorder.ondataavailable = e => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
