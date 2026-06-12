@@ -1,6 +1,0 @@
-# HTTPS automatico para el SaaS. Caddy obtiene y renueva el certificado
-# Let's Encrypt en cuanto el dominio resuelva a este servidor.
-tiendas.prosegin.com {
-    encode gzip
-    reverse_proxy frontend:80
-}

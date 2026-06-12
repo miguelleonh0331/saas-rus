@@ -20,36 +20,15 @@ services:
         - VITE_API_URL=${VITE_API_URL}
     container_name: rus_frontend
     restart: unless-stopped
-    expose:
-      - "80"                          # interno; Caddy lo expone con HTTPS
     ports:
-      - "${WEB_PORT:-8080}:80"        # acceso directo opcional por IP:8080 (pruebas)
+      - "${WEB_PORT:-8080}:80"        # Apache (host) hara de proxy HTTPS hacia este puerto
     depends_on:
       - backend
     networks:
       - rus_net
 
-  # Proxy con HTTPS automatico (Let's Encrypt). Saca y renueva el certificado solo.
-  caddy:
-    image: caddy:2-alpine
-    container_name: rus_caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data              # aqui guarda los certificados (persisten)
-      - caddy_config:/config
-    depends_on:
-      - frontend
-    networks:
-      - rus_net
-
 volumes:
   rus_data:
-  caddy_data:
-  caddy_config:
 
 networks:
   rus_net:
