@@ -1,4 +1,5 @@
-const BASE = import.meta.env.VITE_API_URL || '/api';
+const BASE = import.meta.env.VITE_API_URL
+  || (window.location.protocol === 'capacitor:' ? 'https://tiendas.prosegin.com/api' : '/api');
 
 let token: string | null = localStorage.getItem('token');
 
