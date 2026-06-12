@@ -1,5 +1,7 @@
-const BASE = import.meta.env.VITE_API_URL
-  || (window.location.protocol === 'capacitor:' ? 'https://tiendas.prosegin.com/api' : '/api');
+import { Capacitor } from '@capacitor/core';
+
+const PROD_API = 'https://tiendas.prosegin.com/api';
+const BASE = import.meta.env.VITE_API_URL || (Capacitor.isNativePlatform() ? PROD_API : '/api');
 
 let token: string | null = localStorage.getItem('token');
 

@@ -2,6 +2,7 @@
 .env
 *.env
 !.env.example
+!frontend/.env.android
 
 # Dependencias
 node_modules/
