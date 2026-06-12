@@ -25,7 +25,7 @@ async function req(path: string, opts: RequestInit = {}) {
 
 export const api = {
   login: (celular: string, password: string) =>
-    req('/auth/login', { method: 'POST', body: JSON.stringify({ celular, password }) }),
+    req('/auth/login', { method: 'POST', body: JSON.stringify({ celular: celular.replace(/\D/g, ''), password }) }),
   registrarVenta: (monto: number) =>
     req('/ventas', { method: 'POST', body: JSON.stringify({ monto }) }),
   resumen: () => req('/ventas/resumen'),

@@ -8,7 +8,8 @@ import { loginLimiter } from '../middleware/security';
 export const authRouter = Router();
 
 const loginSchema = z.object({
-  celular: z.string().min(6).max(20).regex(/^[0-9]+$/, 'Celular invalido'),
+  // Limpia espacios y cualquier no-digito antes de validar (anti errores de autocompletar).
+  celular: z.string().transform(s => s.replace(/\D/g, '')).pipe(z.string().min(6).max(20)),
   password: z.string().min(4).max(100),
 });
 
