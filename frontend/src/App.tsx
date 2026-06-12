@@ -92,11 +92,9 @@ function Caja({ onLogout }: { onLogout: () => void }) {
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [ultimaVenta, setUltimaVenta] = useState<number | null>(null);
   const [reco, setReco] = useState<{ estado: 'analizando' | 'ok' | 'fail'; texto: string } | null>(null);
-  const [scannerOpen, setScannerOpen] = useState(true);
   const [productoDetectado, setProductoDetectado] = useState<{ id: number; nombre: string; marca: string; precio: number } | null>(null);
 
   async function reconocer(file: File) {
-    setScannerOpen(false);
     setReco({ estado: 'analizando', texto: 'Reconociendo producto...' });
     try {
       const foto = await reducirFoto(file);
@@ -140,85 +138,13 @@ function Caja({ onLogout }: { onLogout: () => void }) {
   const montoNum = parseFloat(monto) || 0;
   const vuelto = pagaCon !== null ? pagaCon - montoNum : null;
 
-  const t = resumen?.termometro;
   return (
-    <div className="mx-auto max-w-md space-y-4 p-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold">Registro</h2>
-        <button onClick={onLogout} className="text-slate-400 text-sm">Salir</button>
-      </div>
-
-      <div className="rounded-2xl bg-emerald-900/60 border border-emerald-600 p-4 space-y-3 sticky top-3 z-20 shadow-xl shadow-black/20">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="font-bold text-emerald-100">Scanner activo</h3>
-            <p className="text-sm text-emerald-200/80">La cámara queda lista al entrar a caja.</p>
-          </div>
-          <button
-            onClick={() => setScannerOpen(v => !v)}
-            className="rounded-xl bg-emerald-500 px-4 py-2 font-bold text-slate-950 active:bg-emerald-400"
-          >
-            {scannerOpen ? 'Ocultar' : 'Mostrar'}
-          </button>
-        </div>
-        <button
-          onClick={() => setScannerOpen(true)}
-          className="w-full rounded-2xl bg-emerald-500 py-4 text-lg font-bold text-slate-950 active:bg-emerald-400"
-        >
-          📷 Abrir cámara
-        </button>
-      </div>
-
-      {/* Termometro mensual */}
-      {t && (
-        <div className="rounded-2xl bg-slate-800 p-4">
-          <div className="flex justify-between text-sm text-slate-300">
-            <span>Vendido este mes</span><span>S/. {t.vendido.toFixed(2)} / {t.limite}</span>
-          </div>
-          <div className="mt-2 h-4 w-full rounded-full bg-slate-700 overflow-hidden">
-            <div style={{ width: `${Math.min(t.porcentaje, 100)}%`, background: COLOR[t.nivel] }}
-              className="h-full transition-all" />
-          </div>
-          <div className="mt-1 flex justify-between text-sm">
-            <span style={{ color: COLOR[t.nivel] }}>{t.porcentaje}%</span>
-            <span className="text-slate-300">Te falta S/. {t.restante.toFixed(2)}</span>
-          </div>
-          {t.alerta && <p className="mt-2 text-center font-semibold" style={{ color: COLOR[t.nivel] }}>{t.alerta}</p>}
-        </div>
-      )}
-
-      {/* Resumen del dia */}
-      {resumen && (
-        <div className="flex gap-3">
-          <div className="flex-1 rounded-2xl bg-slate-800 p-3 text-center">
-            <div className="text-2xl font-bold">S/. {resumen.dia.total.toFixed(2)}</div>
-            <div className="text-xs text-slate-400">Ventas de hoy</div>
-          </div>
-          <div className="flex-1 rounded-2xl bg-slate-800 p-3 text-center">
-            <div className="text-2xl font-bold">{resumen.dia.operaciones}</div>
-            <div className="text-xs text-slate-400">Operaciones</div>
-          </div>
-        </div>
-      )}
-
-      {/* Reconocer producto con la camara */}
-      <div className="rounded-2xl bg-emerald-950/40 border border-emerald-700 p-4 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="font-bold text-emerald-200">Modo scanner</h3>
-            <p className="text-sm text-emerald-300/80">Apunta al producto, toma foto y llena el monto solo.</p>
-          </div>
-          <button
-            onClick={() => setScannerOpen(v => !v)}
-            className="rounded-xl bg-emerald-600 px-4 py-2 font-bold active:bg-emerald-700"
-          >
-            {scannerOpen ? 'Cerrar' : 'Abrir'}
-          </button>
-        </div>
-
-        {scannerOpen ? (
-          <label className="block w-full rounded-2xl bg-emerald-600 py-4 text-center text-lg font-bold cursor-pointer active:bg-emerald-700">
-            📷 Escanear producto
+    <div className="mx-auto flex min-h-[calc(100vh-80px)] max-w-md flex-col gap-3 p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-lg font-bold">Registro</h2>
+        <div className="flex items-center gap-2">
+          <label className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-lg font-bold active:bg-emerald-700">
+            📷
             <input
               type="file"
               accept="image/*"
@@ -230,18 +156,12 @@ function Caja({ onLogout }: { onLogout: () => void }) {
               }}
             />
           </label>
-          ) : null}
-
-        {productoDetectado && (
-          <div className="rounded-xl bg-emerald-900/40 p-3 text-sm text-emerald-100">
-            Detectado: <span className="font-bold">{productoDetectado.nombre}</span>
-            {productoDetectado.marca ? ` · ${productoDetectado.marca}` : ''}
-            {' '}— S/. {Number(productoDetectado.precio).toFixed(2)}
-          </div>
-        )}
+          <button onClick={onLogout} className="h-10 rounded-lg bg-slate-800 px-3 text-sm text-slate-300 active:bg-slate-700">Salir</button>
+        </div>
       </div>
+
       {reco && (
-        <div className={`rounded-xl p-3 text-center font-semibold ${
+        <div className={`rounded-lg px-3 py-2 text-center text-sm font-semibold ${
           reco.estado === 'ok' ? 'bg-green-900/40 text-green-300'
           : reco.estado === 'fail' ? 'bg-red-900/40 text-red-300'
           : 'bg-slate-700 text-slate-200'}`}>
@@ -250,28 +170,36 @@ function Caja({ onLogout }: { onLogout: () => void }) {
       )}
 
       {/* Monto */}
-      <div className="rounded-2xl bg-slate-800 p-4 text-right text-4xl font-bold min-h-[64px]">
+      <div className="rounded-xl bg-slate-800 px-4 py-4 text-right text-5xl font-bold min-h-[76px]">
         {monto || '0'}
       </div>
 
+      {productoDetectado && (
+        <div className="rounded-lg bg-emerald-900/40 px-3 py-2 text-sm text-emerald-100">
+          {productoDetectado.nombre}
+          {productoDetectado.marca ? ` · ${productoDetectado.marca}` : ''}
+          {' '}— S/. {Number(productoDetectado.precio).toFixed(2)}
+        </div>
+      )}
+
       {/* Vuelto: con cuanto paga el cliente */}
       {montoNum > 0 && (
-        <div className="rounded-2xl bg-slate-800 p-3 space-y-2">
-          <div className="text-sm text-slate-400">Paga con:</div>
+        <div className="rounded-xl bg-slate-800 p-3 space-y-2">
+          <div className="text-xs text-slate-400">Paga con:</div>
           <div className="grid grid-cols-4 gap-2">
             {[10, 20, 50, 100, 200].map(b => (
               <button key={b} onClick={() => setPagaCon(b)}
-                className={`rounded-lg py-3 text-lg font-bold ${pagaCon === b ? 'bg-sky-500' : 'bg-slate-700 active:bg-slate-600'}`}>
+                className={`rounded-lg py-2 text-base font-bold ${pagaCon === b ? 'bg-sky-500' : 'bg-slate-700 active:bg-slate-600'}`}>
                 {b}
               </button>
             ))}
             <button onClick={() => setPagaCon(montoNum)}
-              className={`rounded-lg py-3 text-sm font-bold ${pagaCon === montoNum ? 'bg-sky-500' : 'bg-slate-700 active:bg-slate-600'}`}>
+              className={`rounded-lg py-2 text-xs font-bold ${pagaCon === montoNum ? 'bg-sky-500' : 'bg-slate-700 active:bg-slate-600'}`}>
               Exacto
             </button>
           </div>
           {vuelto !== null && (
-            <div className={`rounded-xl p-3 text-center text-2xl font-bold ${vuelto < 0 ? 'bg-red-900/40 text-red-300' : 'bg-green-900/40 text-green-300'}`}>
+            <div className={`rounded-lg p-2 text-center text-xl font-bold ${vuelto < 0 ? 'bg-red-900/40 text-red-300' : 'bg-green-900/40 text-green-300'}`}>
               {vuelto < 0
                 ? `Falta S/. ${Math.abs(vuelto).toFixed(2)}`
                 : `Vuelto: S/. ${vuelto.toFixed(2)}`}
@@ -281,13 +209,13 @@ function Caja({ onLogout }: { onLogout: () => void }) {
       )}
 
       {/* Teclado gigante */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid flex-1 grid-cols-3 gap-2">
         {['1','2','3','4','5','6','7','8','9','00','0','.'].map(k => (
           <button key={k} onClick={() => tecla(k)}
-            className="rounded-xl bg-slate-700 py-5 text-2xl font-bold active:bg-slate-600">{k}</button>
+            className="min-h-14 rounded-lg bg-slate-700 py-4 text-2xl font-bold active:bg-slate-600">{k}</button>
         ))}
-        <button onClick={() => tecla('←')} className="rounded-xl bg-slate-700 py-5 text-2xl active:bg-slate-600">←</button>
-        <button onClick={registrar} className="col-span-2 rounded-xl bg-sky-500 py-5 text-2xl font-bold active:bg-sky-600">
+        <button onClick={() => tecla('←')} className="min-h-14 rounded-lg bg-slate-700 py-4 text-2xl active:bg-slate-600">←</button>
+        <button onClick={registrar} className="col-span-2 min-h-14 rounded-lg bg-sky-500 py-4 text-xl font-bold active:bg-sky-600">
           Registrar Venta
         </button>
       </div>
