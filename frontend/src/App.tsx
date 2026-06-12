@@ -194,7 +194,20 @@ function Inventario() {
 
   function leerFoto(file: File) {
     const r = new FileReader();
-    r.onload = () => setForm(f => ({ ...f, foto: String(r.result) }));
+    r.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        // Reduce la foto: max 1024px y JPEG calidad 0.8 (liviana para IA y BD)
+        const max = 1024;
+        const escala = Math.min(1, max / Math.max(img.width, img.height));
+        const w = Math.round(img.width * escala), h = Math.round(img.height * escala);
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d')!.drawImage(img, 0, 0, w, h);
+        setForm(f => ({ ...f, foto: c.toDataURL('image/jpeg', 0.8) }));
+      };
+      img.src = String(r.result);
+    };
     r.readAsDataURL(file);
   }
 

@@ -15,6 +15,7 @@ migrate();
 const app = express();
 
 app.disable('x-powered-by');
+app.set('trust proxy', 1);               // detras de Apache: confiar en X-Forwarded-For
 app.use(helmet());                       // cabeceras HTTP seguras
 app.use(cors());                          // Nginx hace proxy same-origin; ajustar origin en prod si hace falta
 app.use(express.json({ limit: '12mb' })); // las fotos de inventario van en base64
