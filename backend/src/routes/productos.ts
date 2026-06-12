@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../db';
 import { requireAuth, requireSuscripcionActiva } from '../middleware/auth';
 import { visionChat, extraerJSON } from '../utils/vision';
+import { transcribirAudio } from '../utils/audio';
 
 export const productosRouter = Router();
 productosRouter.use(requireAuth, requireSuscripcionActiva);
@@ -118,6 +119,60 @@ productosRouter.post('/analizar', async (req, res) => {
     const { proveedor, texto } = await visionChat(prompt, fotos);
     const sugerencia = extraerJSON(texto);
     res.json({ proveedor, sugerencia, textoCrudo: sugerencia ? undefined : texto });
+  } catch (e) {
+    res.status(502).json({ error: (e as Error).message });
+  }
+});
+
+// Dictado de caja: transcribe audio y lo cruza contra el inventario del negocio.
+productosRouter.post('/voz', async (req, res) => {
+  const audio = String(req.body?.audio ?? '');
+  if (!audio) return res.status(400).json({ error: 'Falta el audio' });
+
+  const negocioId = req.auth!.negocioId;
+  const catalogo = db.prepare(
+    `SELECT id, nombre, marca, precio, color, tags FROM productos WHERE negocio_id = ? ORDER BY nombre`
+  ).all(negocioId) as { id: number; nombre: string; marca: string; precio: number; color: string; tags: string }[];
+
+  if (!catalogo.length) return res.status(404).json({ error: 'sin_productos', mensaje: 'No hay productos en el inventario.' });
+
+  try {
+    const transcripcion = await transcribirAudio(audio);
+    const listado = catalogo.map(p =>
+      `id ${p.id}: ${p.nombre}${p.marca ? ' marca ' + p.marca : ''}${p.color ? ' color ' + p.color : ''}${p.tags ? ' (' + p.tags + ')' : ''}`
+    ).join('\n');
+
+    const prompt =
+      `Texto dictado por un cajero: "${transcripcion.texto}".\n` +
+      `Inventario disponible:\n${listado}\n\n` +
+      `Extrae productos y cantidades. Usa solo IDs del inventario. ` +
+      `Si una linea no coincide, usa id null y deja el nombre escuchado. ` +
+      `Responde SOLO JSON valido con esta forma: ` +
+      `{"items":[{"id":1,"cantidad":2,"nombre":"texto escuchado","confianza":0-100}]}`;
+
+    const { proveedor, texto } = await visionChat(prompt, []);
+    const parsed = extraerJSON(texto) || {};
+    const items = Array.isArray(parsed.items) ? parsed.items : [];
+    const resueltos = items.map((item: any) => {
+      const prod = catalogo.find(p => p.id === Number(item.id));
+      const cantidad = Math.max(1, Math.min(99, Number(item.cantidad) || 1));
+      if (!prod) {
+        return {
+          encontrado: false,
+          cantidad,
+          nombre: String(item.nombre || 'Producto no reconocido'),
+          confianza: Number(item.confianza) || 0,
+        };
+      }
+      return {
+        encontrado: true,
+        cantidad,
+        confianza: Number(item.confianza) || 0,
+        producto: { id: prod.id, nombre: prod.nombre, marca: prod.marca, precio: prod.precio },
+      };
+    });
+
+    res.json({ proveedorTranscripcion: transcripcion.proveedor, proveedorParser: proveedor, texto: transcripcion.texto, items: resueltos });
   } catch (e) {
     res.status(502).json({ error: (e as Error).message });
   }

@@ -41,4 +41,6 @@ export const api = {
     req('/productos/analizar', { method: 'POST', body: JSON.stringify({ fotos }) }),
   reconocerProducto: (foto: string) =>
     req('/productos/reconocer', { method: 'POST', body: JSON.stringify({ foto }) }),
+  interpretarVoz: (audio: string) =>
+    req('/productos/voz', { method: 'POST', body: JSON.stringify({ audio }) }),
 };

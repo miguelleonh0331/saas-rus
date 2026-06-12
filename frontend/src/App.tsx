@@ -34,6 +34,15 @@ function reducirFoto(file: File): Promise<string> {
   });
 }
 
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onerror = reject;
+    r.onload = () => resolve(String(r.result));
+    r.readAsDataURL(blob);
+  });
+}
+
 export default function App() {
   const [logged, setLogged] = useState(!!getToken());
   const [tab, setTab] = useState<'caja' | 'inventario'>('caja');
@@ -117,8 +126,11 @@ function Caja({ onLogout }: { onLogout: () => void }) {
   const [modoEntrada, setModoEntrada] = useState<'recibido' | 'manual'>('recibido');
   const [cameraOpen, setCameraOpen] = useState(false);
   const [procesando, setProcesando] = useState(false);
+  const [grabando, setGrabando] = useState(false);
   const [ultimaVenta, setUltimaVenta] = useState<number | null>(null);
   const [reco, setReco] = useState<{ estado: 'analizando' | 'ok' | 'fail'; texto: string } | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   async function cargar() {
     try { await api.resumen(); }
@@ -183,6 +195,68 @@ function Caja({ onLogout }: { onLogout: () => void }) {
     setItems(actual => actual.filter(item => item.key !== key));
   }
 
+  async function procesarAudio(blob: Blob) {
+    setProcesando(true);
+    setReco({ estado: 'analizando', texto: 'Escuchando pedido...' });
+    try {
+      const audio = await blobToDataUrl(blob);
+      const r = await api.interpretarVoz(audio);
+      let agregados = 0;
+      const nuevos: ItemVenta[] = [];
+      for (const item of r.items || []) {
+        if (!item.encontrado || !item.producto) continue;
+        const cantidad = Math.max(1, Math.min(99, Number(item.cantidad) || 1));
+        for (let i = 0; i < cantidad; i++) {
+          nuevos.push({
+            key: `voz-${item.producto.id}-${Date.now()}-${agregados}`,
+            nombre: item.producto.marca ? `${item.producto.nombre} · ${item.producto.marca}` : item.producto.nombre,
+            precio: Number(item.producto.precio),
+          });
+          agregados++;
+        }
+      }
+      if (nuevos.length) {
+        setItems(actual => [...actual, ...nuevos]);
+        setReco({ estado: 'ok', texto: `${agregados} producto(s) por voz: "${r.texto}"` });
+        setModoEntrada('recibido');
+        beepScanner();
+      } else {
+        setReco({ estado: 'fail', texto: `No encontre productos en: "${r.texto || 'audio'}"` });
+      }
+    } catch (e: any) {
+      setReco({ estado: 'fail', texto: 'Error voz: ' + e.message });
+    } finally {
+      setProcesando(false);
+    }
+  }
+
+  async function toggleMicrofono() {
+    if (grabando) {
+      recorderRef.current?.stop();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      audioChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      recorderRef.current = recorder;
+      recorder.ondataavailable = e => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach(track => track.stop());
+        setGrabando(false);
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        void procesarAudio(blob);
+      };
+      recorder.start();
+      setGrabando(true);
+      setReco({ estado: 'analizando', texto: 'Grabando pedido...' });
+    } catch (e: any) {
+      setReco({ estado: 'fail', texto: 'No se pudo abrir microfono: ' + (e?.message || 'permiso denegado') });
+    }
+  }
+
   async function registrar() {
     if (total <= 0) return;
     await api.registrarVenta(total);
@@ -206,6 +280,13 @@ function Caja({ onLogout }: { onLogout: () => void }) {
             aria-label="Abrir camara"
           >
             📷
+          </button>
+          <button
+            onClick={toggleMicrofono}
+            className={`flex h-10 w-10 items-center justify-center rounded-lg text-lg font-bold ${grabando ? 'bg-red-500 text-white' : 'bg-sky-600 active:bg-sky-700'}`}
+            aria-label="Microfono"
+          >
+            🎙
           </button>
           <button onClick={onLogout} className="h-10 rounded-lg bg-slate-800 px-3 text-sm text-slate-300 active:bg-slate-700">Salir</button>
         </div>
