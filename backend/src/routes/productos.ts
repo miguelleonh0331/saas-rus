@@ -66,6 +66,43 @@ productosRouter.delete('/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// Reconocer un producto del inventario a partir de una foto (para la caja).
+productosRouter.post('/reconocer', async (req, res) => {
+  const foto = req.body?.foto;
+  if (!foto) return res.status(400).json({ error: 'Falta la foto' });
+
+  const negocioId = req.auth!.negocioId;
+  const catalogo = db.prepare(
+    `SELECT id, nombre, marca, precio, color, tags FROM productos WHERE negocio_id = ?`
+  ).all(negocioId) as { id: number; nombre: string; marca: string; precio: number; color: string; tags: string }[];
+
+  if (!catalogo.length) return res.status(404).json({ error: 'sin_productos', mensaje: 'No hay productos en el inventario.' });
+
+  // Catalogo en texto: la IA elige cual de ESTOS es (no inventa).
+  const listado = catalogo.map(p =>
+    `id ${p.id}: ${p.nombre}${p.marca ? ' marca ' + p.marca : ''}${p.color ? ' color ' + p.color : ''}${p.tags ? ' (' + p.tags + ')' : ''}`
+  ).join('\n');
+
+  const prompt =
+    `Foto de un producto en la caja de una bodega. Abajo esta el inventario. ` +
+    `Indica cual de ESTOS productos es el de la foto (no inventes uno que no este en la lista). ` +
+    `Inventario:\n${listado}\n\n` +
+    `Responde SOLO JSON: {"id": <id del producto o null si ninguno coincide>, "confianza": 0-100, "motivo": "breve"}`;
+
+  try {
+    const { proveedor, texto } = await visionChat(prompt, [foto]);
+    const r = extraerJSON(texto) || {};
+    const prod = catalogo.find(p => p.id === Number(r.id));
+    if (!prod) return res.json({ proveedor, encontrado: false, confianza: r.confianza ?? 0, motivo: r.motivo ?? 'Sin coincidencia' });
+    res.json({
+      proveedor, encontrado: true, confianza: r.confianza ?? 0,
+      producto: { id: prod.id, nombre: prod.nombre, marca: prod.marca, precio: prod.precio },
+    });
+  } catch (e) {
+    res.status(502).json({ error: (e as Error).message });
+  }
+});
+
 // Analizar una foto con IA y sugerir atributos para llenar el formulario.
 productosRouter.post('/analizar', async (req, res) => {
   const fotos: string[] = Array.isArray(req.body?.fotos) ? req.body.fotos : [req.body?.foto].filter(Boolean);

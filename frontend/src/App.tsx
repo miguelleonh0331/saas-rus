@@ -11,6 +11,29 @@ const COLOR: Record<string, string> = {
   verde: '#22c55e', amarillo: '#eab308', naranja: '#f97316', rojo: '#ef4444',
 };
 
+// Reduce una foto (max 1024px, JPEG 0.8) y devuelve data URL. Liviana para IA y BD.
+function reducirFoto(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onerror = reject;
+    r.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const max = 1024;
+        const escala = Math.min(1, max / Math.max(img.width, img.height));
+        const w = Math.round(img.width * escala), h = Math.round(img.height * escala);
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d')!.drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', 0.8));
+      };
+      img.src = String(r.result);
+    };
+    r.readAsDataURL(file);
+  });
+}
+
 export default function App() {
   const [logged, setLogged] = useState(!!getToken());
   const [tab, setTab] = useState<'caja' | 'inventario'>('caja');
@@ -68,6 +91,25 @@ function Caja({ onLogout }: { onLogout: () => void }) {
   const [pagaCon, setPagaCon] = useState<number | null>(null);
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [ultimaVenta, setUltimaVenta] = useState<number | null>(null);
+  const [reco, setReco] = useState<{ estado: 'analizando' | 'ok' | 'fail'; texto: string } | null>(null);
+
+  async function reconocer(file: File) {
+    setReco({ estado: 'analizando', texto: 'Reconociendo producto...' });
+    try {
+      const foto = await reducirFoto(file);
+      const r = await api.reconocerProducto(foto);
+      if (r.encontrado) {
+        setMonto(String(r.producto.precio));
+        setPagaCon(null);
+        setReco({ estado: 'ok', texto: `${r.producto.nombre} — S/. ${Number(r.producto.precio).toFixed(2)} (${r.confianza}%)` });
+      } else {
+        setReco({ estado: 'fail', texto: 'No reconocido. Ingresa el monto a mano.' });
+      }
+    } catch (e: any) {
+      const m = e?.data?.error === 'sin_productos' ? 'No tienes productos en inventario aun.' : ('Error: ' + e.message);
+      setReco({ estado: 'fail', texto: m });
+    }
+  }
 
   async function cargar() {
     try { setResumen(await api.resumen()); }
@@ -86,7 +128,7 @@ function Caja({ onLogout }: { onLogout: () => void }) {
     if (!v || v <= 0) return;
     const r = await api.registrarVenta(v);
     setResumen(s => s ? { ...s, termometro: r.termometro } : s);
-    setUltimaVenta(v); setMonto(''); setPagaCon(null); cargar();
+    setUltimaVenta(v); setMonto(''); setPagaCon(null); setReco(null); cargar();
   }
 
   const montoNum = parseFloat(monto) || 0;
@@ -129,6 +171,21 @@ function Caja({ onLogout }: { onLogout: () => void }) {
             <div className="text-2xl font-bold">{resumen.dia.operaciones}</div>
             <div className="text-xs text-slate-400">Operaciones</div>
           </div>
+        </div>
+      )}
+
+      {/* Reconocer producto con la camara */}
+      <label className="block w-full rounded-2xl bg-emerald-600 py-4 text-center text-lg font-bold cursor-pointer active:bg-emerald-700">
+        📷 Reconocer producto con foto
+        <input type="file" accept="image/*" capture="environment" className="hidden"
+          onChange={e => { if (e.target.files?.[0]) reconocer(e.target.files[0]); e.currentTarget.value = ''; }} />
+      </label>
+      {reco && (
+        <div className={`rounded-xl p-3 text-center font-semibold ${
+          reco.estado === 'ok' ? 'bg-green-900/40 text-green-300'
+          : reco.estado === 'fail' ? 'bg-red-900/40 text-red-300'
+          : 'bg-slate-700 text-slate-200'}`}>
+          {reco.texto}
         </div>
       )}
 
@@ -192,23 +249,8 @@ function Inventario() {
   async function cargar() { try { setLista(await api.productos()); } catch { /* ignore */ } }
   useEffect(() => { cargar(); }, []);
 
-  function leerFoto(file: File) {
-    const r = new FileReader();
-    r.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        // Reduce la foto: max 1024px y JPEG calidad 0.8 (liviana para IA y BD)
-        const max = 1024;
-        const escala = Math.min(1, max / Math.max(img.width, img.height));
-        const w = Math.round(img.width * escala), h = Math.round(img.height * escala);
-        const c = document.createElement('canvas');
-        c.width = w; c.height = h;
-        c.getContext('2d')!.drawImage(img, 0, 0, w, h);
-        setForm(f => ({ ...f, foto: c.toDataURL('image/jpeg', 0.8) }));
-      };
-      img.src = String(r.result);
-    };
-    r.readAsDataURL(file);
+  async function leerFoto(file: File) {
+    setForm(f => ({ ...f, foto: await reducirFoto(file) }));
   }
 
   async function analizar() {

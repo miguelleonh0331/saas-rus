@@ -39,4 +39,6 @@ export const api = {
   eliminarProducto: (id: number) => req(`/productos/${id}`, { method: 'DELETE' }),
   analizarFoto: (fotos: string[]) =>
     req('/productos/analizar', { method: 'POST', body: JSON.stringify({ fotos }) }),
+  reconocerProducto: (foto: string) =>
+    req('/productos/reconocer', { method: 'POST', body: JSON.stringify({ foto }) }),
 };
