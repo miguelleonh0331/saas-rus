@@ -18,7 +18,8 @@ declare global {
 }
 
 export function firmarToken(payload: AuthPayload): string {
-  return jwt.sign(payload, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+  const opts: jwt.SignOptions = { expiresIn: config.jwtExpiresIn as jwt.SignOptions['expiresIn'] };
+  return jwt.sign(payload, config.jwtSecret, opts);
 }
 
 // Exige un JWT valido. Bloquea si falta o es invalido.
