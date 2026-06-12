@@ -44,6 +44,7 @@ function Login({ onOk }: { onOk: () => void }) {
 
 function Caja({ onLogout }: { onLogout: () => void }) {
   const [monto, setMonto] = useState('');
+  const [pagaCon, setPagaCon] = useState<number | null>(null);
   const [resumen, setResumen] = useState<Resumen | null>(null);
   const [ultimaVenta, setUltimaVenta] = useState<number | null>(null);
 
@@ -54,6 +55,7 @@ function Caja({ onLogout }: { onLogout: () => void }) {
   useEffect(() => { cargar(); }, []);
 
   function tecla(t: string) {
+    setPagaCon(null);   // si editas el monto, se reinicia el vuelto
     if (t === '←') return setMonto(m => m.slice(0, -1));
     if (t === '.' && monto.includes('.')) return;
     setMonto(m => (m + t).slice(0, 9));
@@ -63,8 +65,11 @@ function Caja({ onLogout }: { onLogout: () => void }) {
     if (!v || v <= 0) return;
     const r = await api.registrarVenta(v);
     setResumen(s => s ? { ...s, termometro: r.termometro } : s);
-    setUltimaVenta(v); setMonto(''); cargar();
+    setUltimaVenta(v); setMonto(''); setPagaCon(null); cargar();
   }
+
+  const montoNum = parseFloat(monto) || 0;
+  const vuelto = pagaCon !== null ? pagaCon - montoNum : null;
 
   const t = resumen?.termometro;
   return (
@@ -110,6 +115,32 @@ function Caja({ onLogout }: { onLogout: () => void }) {
       <div className="rounded-2xl bg-slate-800 p-4 text-right text-4xl font-bold min-h-[64px]">
         {monto || '0'}
       </div>
+
+      {/* Vuelto: con cuanto paga el cliente */}
+      {montoNum > 0 && (
+        <div className="rounded-2xl bg-slate-800 p-3 space-y-2">
+          <div className="text-sm text-slate-400">Paga con:</div>
+          <div className="grid grid-cols-4 gap-2">
+            {[10, 20, 50, 100, 200].map(b => (
+              <button key={b} onClick={() => setPagaCon(b)}
+                className={`rounded-lg py-3 text-lg font-bold ${pagaCon === b ? 'bg-sky-500' : 'bg-slate-700 active:bg-slate-600'}`}>
+                {b}
+              </button>
+            ))}
+            <button onClick={() => setPagaCon(montoNum)}
+              className={`rounded-lg py-3 text-sm font-bold ${pagaCon === montoNum ? 'bg-sky-500' : 'bg-slate-700 active:bg-slate-600'}`}>
+              Exacto
+            </button>
+          </div>
+          {vuelto !== null && (
+            <div className={`rounded-xl p-3 text-center text-2xl font-bold ${vuelto < 0 ? 'bg-red-900/40 text-red-300' : 'bg-green-900/40 text-green-300'}`}>
+              {vuelto < 0
+                ? `Falta S/. ${Math.abs(vuelto).toFixed(2)}`
+                : `Vuelto: S/. ${vuelto.toFixed(2)}`}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Teclado gigante */}
       <div className="grid grid-cols-3 gap-2">
