@@ -601,7 +601,13 @@ function Inventario() {
   const [analizando, setAnalizando] = useState(false);
   const [msg, setMsg] = useState('');
 
-  async function cargar() { try { setLista(await api.productos()); } catch { /* ignore */ } }
+  async function cargar() {
+    try {
+      setLista(await api.productos());
+    } catch (e: any) {
+      setMsg('Error inventario: ' + (e?.message || 'No se pudo conectar'));
+    }
+  }
   useEffect(() => { cargar(); }, []);
 
   async function leerFoto(file: File) {
@@ -632,9 +638,13 @@ function Inventario() {
   async function guardar() {
     const precio = parseFloat(form.precio);
     if (!form.nombre || !precio) { setMsg('Falta nombre y precio'); return; }
-    await api.crearProducto({ ...form, precio });
-    setForm({ nombre: '', marca: '', precio: '', color: '', tags: '', foto: '' });
-    setMsg('Producto guardado'); cargar();
+    try {
+      await api.crearProducto({ ...form, precio });
+      setForm({ nombre: '', marca: '', precio: '', color: '', tags: '', foto: '' });
+      setMsg('Producto guardado'); cargar();
+    } catch (e: any) {
+      setMsg('Error al guardar: ' + (e?.message || 'No se pudo conectar'));
+    }
   }
 
   async function eliminar(id: number) {
